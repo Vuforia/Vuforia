@@ -1,0 +1,17 @@
+function bank=melbankm3(filterNum,frameSize,fs) 
+maxMelFreq = freq2mel(fs/2); %将线性频率转化为mel频率，得到最大的Mel频率
+sideWidth=maxMelFreq/(filterNum+1);%求频带宽带，即Mel滤波器宽度
+index=0:filterNum-1;%滤波器的中心 0到23
+filterBankPrm=floor(mel2freq([index;index+1;index+2]*sideWidth)/8000*frameSize)+1;%3行24列矩阵
+%filterBankPrm=256*N/8000 跟nfft有关
+filterBankPrm(end, end)= frameSize/2;  %规定filterBankPrm的最后一个值
+
+bank=zeros(filterNum,frameSize/2+1);   %建立一个空的24行129列的矩阵
+for i=1:filterNum    %1到24
+    startF=filterBankPrm(1,i);
+    centerF=filterBankPrm(2,i);
+    endF=filterBankPrm(3,i);
+    bank(i,startF:centerF)=double(([startF:centerF]-startF)/(centerF-startF));
+    bank(i,centerF:endF)=double((endF-[centerF:endF])/(endF-centerF));
+end
+end
