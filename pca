@@ -1,0 +1,13 @@
+function [P,W]=pca(data,d);
+    Cx=cov(data);
+    [a,b]=eig(Cx);
+    b=diag(b);
+    [m,n]=sort(b,'descend');%m为排列之后的值，n为值原来的位置
+  %n=n(1:d(q),1);
+  %size(n,1)
+  for x=1:d
+      b1(:,x)=a(:,n(x));
+  end
+  P=data*b1;
+  W=b1;
+end
