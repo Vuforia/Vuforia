@@ -1,0 +1,38 @@
+function ccc= mfcc_cyy(v_start,v_end,FrameLen,FrameInc,x,Fs)
+    xx=double(x);xx=filter([1 -0.9375],1,xx);     %预加重滤波器
+    
+    xx=enframe(xx,256,128);         %分帧加窗
+    
+    bank=melbankm3(24,256,8000);
+    bank=full(bank);bank=bank/max(max(bank));%归一化mel滤波器组参数
+     
+     for k=1:12
+         n=0:23;
+         dctcoef(:,k)=cos((2*n+1)*k*pi/(2*24));   %和DCT有关系，具体是干嘛的不知道
+     end
+     w=1+6*sin(pi*[1:12]./12);w=w/max(w);
+     
+    for i=1:size(xx,1) %
+        y=xx(i,:);
+        s=y'.*hamming(256);
+        t=abs(fft(s));
+        t=t.^2;%计算能量
+        c1=dctcoef'*log(bank*t(1:129));%dctcoef为dct系数，bank归一化mel滤波器组系数
+        c2=c1.*w';%w为归一化倒谱提升窗口
+        C(i,:)=c2';
+    end
+
+    %差分系数
+    dtm=zeros(size(C));
+    for k=1:size(C,1)
+        if k<=2
+            dtm(k,:)=C(k+1,:)-C(k,:);
+        elseif k>=size(C,1)-1
+            dtm(k,:)=C(k,:)-C(k-1,:);
+        else
+            dtm(k,:)=2*C(k+2,:)-2*C(k-2,:)+C(k+1,:)-C(k-1,:);
+            dtm(k,:)=dtm(k,:)/10;
+        end
+    end
+    ccc= [C dtm];       %得到24维的数据。
+    ccc=ccc(3:size(C,1)-2,:);   %去除首尾两帧，因为这两帧的一阶差分参数为0
