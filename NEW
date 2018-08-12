@@ -1,0 +1,158 @@
+clear;
+clc;
+FrameLen = 256; %帧长
+FrameInc = 100; %帧移
+
+%% 计算每个人的训练语音和测试语音的mfcc参数。
+for i=1:10      %i是第i个人
+    file1=['C:\Documents and Settings\oseasy\桌面\程序代码 -修改\speech_train\',num2str(i-1),'.wav'];
+    [y_train,Fs,bits]=wavread(file1);    %音频读取形式
+
+    [v_start_train,v_end_train] = vad2(y_train',FrameLen,FrameInc); %检测训练语音段,端点检测
+    m_train= mfcc_cyy(v_start_train,v_end_train,FrameLen,FrameInc,y_train',Fs); %提取 训练数据的  mfcc系数
+    train_data(i).mfcc = m_train; 
+    %下面这部分是应用KNN分类器时需要用到的标签数据。如果仅仅利用矢量量化（VQ），则下面这部分可以省去。
+    trainsize=size(m_train,1);   %得到这个人训练语音的帧数大小。
+    train_label=zeros(trainsize,1);
+    train_label(1:trainsize,1)=i;
+    train_data(i).label=train_label;      %得到训练数据的每个人的类别标签。
+end
+ % 下面两行将每个人的训练数据合在一起变成一个总的训练数据TrainData
+TrainData=[train_data(1).mfcc',train_data(2).mfcc',train_data(3).mfcc',train_data(4).mfcc',train_data(5).mfcc',train_data(6).mfcc',train_data(7).mfcc',train_data(8).mfcc',train_data(9).mfcc',train_data(10).mfcc']';
+TrainLabel=[train_data(1).label',train_data(2).label',train_data(3).label',train_data(4).label',train_data(5).label',train_data(6).label',train_data(7).label',train_data(8).label',train_data(9).label',train_data(10).label']';
+[P_train,W]=pca(TrainData,12);
+%[L_train]=lle(TrainData',10,3);
+for i=1:10
+    train_data(i).mfcc=P_train((932*i-931):932*i,:);
+end
+% TestData=[test_data(1).mfcc',test_data(2).mfcc',test_data(3).mfcc',test_data(4).mfcc',test_data(5).mfcc',test_data(6).mfcc',test_data(7).mfcc',test_data(8).mfcc',test_data(9).mfcc',test_data(10).mfcc']';
+% TestLabel=[test_data(1).label',test_data(2).label',test_data(3).label',test_data(4).label',test_data(5).label',test_data(6).label',test_data(7).label',test_data(8).label',test_data(9).label',test_data(10).label']';
+% 
+% [L_test]=lle(TestData',10,3);
+% [P_test]=pca(TestData,12);
+% for i=1:10
+%     test_data(i).mfcc=L_test((745*i-744):745*i,:);
+% end
+
+% %% 利用KNN进行语音识别。
+% % 下面两行将每个人的训练数据合在一起变成一个总的训练数据TrainData
+% TrainData=[train_data(1).mfcc',train_data(2).mfcc',train_data(3).mfcc',train_data(4).mfcc',train_data(5).mfcc',train_data(6).mfcc',train_data(7).mfcc',train_data(8).mfcc',train_data(9).mfcc',train_data(10).mfcc']';
+% TrainLabel=[train_data(1).label',train_data(2).label',train_data(3).label',train_data(4).label',train_data(5).label',train_data(6).label',train_data(7).label',train_data(8).label',train_data(9).label',train_data(10).label']';
+% k=1;nclass=10;
+% for i=1:10
+%     result=[];
+%     [result]=wdy_KNN_2version(TrainData,TrainLabel,test_data(i).mfcc,k,test_data(i).label);   %result是训练数据中每个点被分到了几类。
+%     final_class=zeros(1,nclass);
+%     for j=1:nclass
+%         final_class(j)=length(find(result==j));   %下面统计result中各个类别出现的次数
+%     end  
+%     location=find(final_class==max(final_class));
+%     class(i)=location(1); %次数出现最多的那个类，就把第i个人分为那个类
+% end
+% count=0;
+% for i=1:10
+%    if class(i)==i
+%        count=count+1;
+%    end
+% end
+% OA=count/10;
+for i=1:10      %i是第i个人
+    file1=['C:\Documents and Settings\oseasy\桌面\程序代码 -修改\speech_test\',num2str(i-1),'.wav'];
+    [y_test,Fs,bits]=wavread(file1);    %音频读取形式
+    [v_start_test,v_end_test] = vad2(y_test',FrameLen,FrameInc); %检测测试语音段,端点检测
+    m_test= mfcc_cyy(v_start_test,v_end_test,FrameLen,FrameInc,y_test',Fs); %提取测试数据的  mfcc系数
+    m_test=m_test*W;
+    test_data(i).mfcc = m_test;     
+end
+%% 计算每个人各自的码本。
+ numb=[6,10,6,8,10,5,7,9,7,10];       %每个人的码本中码字个数。
+% numb=[600,1000,600,800,1000,500,700,900,700,1000]; 
+for i=1:10
+    k=numb(i);
+    r = vqlbg(train_data(i).mfcc' ,k);    %k是人为设置的码字个数。
+    MB(i).maben = r; 
+end
+%% 利用每个人的码本信息，对未知的测试点进行识别。
+% 这里仅仅测试第一个人的测试数据的分类情况，如果分为第一个人，说明分对了。
+for ii=1:10
+    testdata_1=test_data(ii).mfcc;
+    ln=size(testdata_1,1);  %测试数据的点数
+    for i=1:10         % 5个码本
+        mb=MB(i).maben;
+        ml=size(mb,2);      %第i个人码本内码字个数
+        for j=1:ln
+            a=testdata_1(j,:);
+            for c=1:ml
+                b=mb(:,c)';
+                distance(j,c)=sqrt((a-b)*(a-b)');
+            end          
+        end    
+        [sorted,index]=sort(distance'); 
+        error(i)=sum(sorted(1,:));
+    end
+    class(ii)=find(error==min(error));
+end
+count=0;
+for i=1:10
+   if class(i)==i
+       count=count+1;
+   end
+end
+OA=count/10;
+
+
+
+
+
+
+
+
+% for i=1:2
+%     file=['.\speech_train\luyin\1\',num2str(i),'.wav'];
+%     [y,Fs,bits]=wavread(file);    %音频读取形式
+%  %语音端点检测
+%     [v_start,v_end] = vad2(y',FrameLen,FrameInc); %检测语音段,端点检测
+%   m= mfcc2(v_start,v_end,FrameLen,FrameInc,y',Fs); %提取mfcc系数
+%     train_data(i).mfcc = m; 
+% end
+% % 搜索test文件
+% for i=1:10
+%        file=['D:\vq\speech_train\luyin\1\',num2str(d),'.wav'];
+%         [y,Fs,bits]=wavread(file);
+% end
+% % 提取test数据mfcc特征
+% for i=1:length(wavpath)
+%     [y,Fs,bits] = wavread(wavpath(i).name); 
+
+%     x=mean(x,2);
+%     flag=vad2(y,FrameLen,FrameInc); %检测语音段 端点检测
+%     m = mfcc(flag);
+%     %m = mfcc2(flag,Fs,'');
+%     test_data(i).mfcc = m; %提取mfcc系数
+% end
+% plot(m);
+
+
+
+%clear wavpath; clear m;
+%dtw算法
+%disp('正在进行模板匹配...') 
+%for i=1:size(test_data,2)  % 返回test_data的列数  因为dtw就是把test当作横轴把train当作纵轴来搜索路径
+%    for j=1:size(train_data,2)
+%        dist2(i,j) = dtw2(test_data(i).mfcc, train_data(j).mfcc); 
+%    end 
+%end 
+ 
+%disp('正在计算匹配结果...') 
+%for i=1:length(test_label)
+%	[d,j] = min(dist2(i,:)); 
+%	fprintf('测试模板 %d 的识别结果为：%d\n', test_label(i), train_label(j));
+%    if test_label(i)==train_label(j)
+%        num=num+1;
+%   end
+%end 
+%fprintf('识别正确数为：%d，总数为：%d,识别正确率为：%s\n',num,i,strcat(num2str(100*num/i),'%'));
+
+
+    
+    
