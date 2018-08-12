@@ -1,0 +1,93 @@
+function [v_start,v_end]=vad2(x,FrameLen,FrameInc)
+%计算过零率
+w=hamming(FrameLen);%加汉明窗
+len=length(x);
+n_frame=ceil((len-FrameLen)/FrameInc)+1;  
+for j=1:n_frame
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    if j<n_frame%分帧加窗
+        s(j,:)=x(1+(j-1)*FrameInc:FrameLen+(j-1)*FrameInc).*w';
+    else
+        s(j,:)=[x(1+(j-1)*FrameInc:len),zeros(1,FrameLen+(j-1)*FrameInc-len)].*w';
+    end
+    %计算短时过零率
+    zc(j)=length(find(s(j,1:FrameLen-1).*s(j,2:FrameLen)<0));
+    %计算短时能量
+    en(j)=s(j,:)*s(j,:)';
+    if(j<=10)
+        Emin(j)=sum(en(1:j))/j;
+        
+    else
+        if(en(j)<=(Emin(j-1)))
+            Emin(j)=0.5*Emin(j-1)+0.5*en(j);
+        elseif Emin(j-1)<=en(j)&&en(j)<2*Emin(j-1);
+            Emin(j)=0.975*Emin(j-1)+0.025*en(j);
+        else
+            Emin(j)=1.025*Emin(j-1);
+        end
+    end
+    zc_th=20;%短时过零率门限
+    en_th(j)=30*Emin(j);%短时能量门限
+    %开始端点检测
+    
+    if en(j)>=en_th(j)||zc(j)<zc_th
+        vad_flag(j)=1;
+    else
+        vad_flag(j)=0;
+    end
+end
+status=0;%初始状态是静默段
+num1=0;%1的个数
+num2=0;%0的个数
+i=0;
+for j=1:n_frame
+    switch status
+        case 0
+            if(vad_flag(j)==1)
+                
+                if num1+num2>=9
+                    num1=num1+1+num2;
+                    i=i+1;
+                    v_start(i)=j-num1+1;
+                    status=1;
+                    num1=0;
+                    num2=0;
+                else
+                    num1=num1+1+num2;
+                    num2=0;
+                end
+            else
+                if num2>=1
+                    num1=0;
+                    num2=0;
+                else
+                    if num1==0
+                        num2=0;
+                    else
+                        num2=num2+1;
+                    end
+                end
+            end
+        case 1
+            if(vad_flag(j)==0)
+                if(num2>=1)
+                    v_end(i)=j-2;
+                    status=0;
+                    num2=0;
+                else
+                    num2=num2+1;
+                end
+            else
+                num2=0;
+            end
+    end
+end
+end
+
+
+
+
+
+
+
+
